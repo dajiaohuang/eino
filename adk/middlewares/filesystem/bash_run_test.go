@@ -30,10 +30,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cloudwego/eino/adk/backgroundtask"
-	backgroundlocal "github.com/cloudwego/eino/adk/backgroundtask/local"
 	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/adk/internal/foreground"
+	"github.com/cloudwego/eino/adk/task"
+	"github.com/cloudwego/eino/adk/task/background"
+	backgroundlocal "github.com/cloudwego/eino/adk/task/local"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
@@ -41,19 +42,19 @@ import (
 func mustNewBackgroundManager(
 	t testing.TB,
 	ctx context.Context,
-	config *backgroundtask.Config,
-) *backgroundtask.Manager {
+	config *background.Config,
+) *background.Manager {
 	t.Helper()
 	if config == nil {
-		config = &backgroundtask.Config{}
+		config = &background.Config{}
 	} else {
 		copy := *config
 		config = &copy
 	}
 	if config.SendTaskCreatedEvent == nil {
-		config.SendTaskCreatedEvent = func(context.Context, *backgroundtask.Task) error { return nil }
+		config.SendTaskCreatedEvent = func(context.Context, *background.TaskSnapshot) error { return nil }
 	}
-	manager, err := backgroundtask.New(ctx, config)
+	manager, err := background.New(ctx, config)
 	require.NoError(t, err)
 	return manager
 }
@@ -66,44 +67,53 @@ type outputRuntimeStub struct {
 	reportErr error
 }
 
-func (*outputRuntimeStub) Controls() <-chan backgroundtask.ControlRequest {
-	return make(chan backgroundtask.ControlRequest)
+func (*outputRuntimeStub) Controls() <-chan background.ControlRequest {
+	return make(chan background.ControlRequest)
 }
 func (*outputRuntimeStub) EmitProgress(
 	context.Context,
 	string,
 	[]byte,
-) (backgroundtask.ProgressEmission, error) {
-	return backgroundtask.ProgressEmission{}, nil
+) (background.ProgressEmission, error) {
+	return background.ProgressEmission{}, nil
 }
 func (r *outputRuntimeStub) ReportTranscriptFailure(context.Context, error) error {
 	return r.reportErr
 }
+func (*outputRuntimeStub) ListInputs(context.Context, int64, int) (*task.ListInputsResult, error) {
+	return &task.ListInputsResult{}, nil
+}
+func (*outputRuntimeStub) WaitInputs(ctx context.Context, _ int64) (*task.ListInputsResult, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (*outputRuntimeStub) AdvanceInputCursor(context.Context, int64, int64) error {
+	return nil
+}
+func (*outputRuntimeStub) CommitInput(context.Context, int64, int64, []byte) error {
+	return nil
+}
+func (*outputRuntimeStub) CommitStart(context.Context, []byte) error { return nil }
 
 var testManagerStores sync.Map
-var testManagerExecutors sync.Map
 
-func newTestManager(t testing.TB, ctx context.Context) *backgroundtask.Manager {
-	store := backgroundtask.NewInMemoryStore(nil)
-	executors := backgroundtask.NewExecutorRegistry()
-	manager := mustNewBackgroundManager(t, ctx, &backgroundtask.Config{
-		Tasks: store, Executors: executors,
+func newTestManager(t testing.TB, ctx context.Context) *background.Manager {
+	store := background.NewInMemoryStore(nil)
+	manager := mustNewBackgroundManager(t, ctx, &background.Config{
+		Tasks: store,
 	})
 	testManagerStores.Store(manager, store)
-	testManagerExecutors.Store(manager, executors)
 	return manager
 }
 
 func mustLocalRunner(
 	t *testing.T,
-	manager *backgroundtask.Manager,
+	manager *background.Manager,
 	configure ...func(*backgroundlocal.Config),
 ) *backgroundlocal.Runner {
 	t.Helper()
-	executors, ok := testManagerExecutors.Load(manager)
-	require.True(t, ok)
 	config := &backgroundlocal.Config{
-		Manager: manager, Executors: executors.(*backgroundtask.ExecutorRegistry),
+		Manager: manager,
 	}
 	for _, apply := range configure {
 		apply(config)
@@ -147,16 +157,16 @@ func findExecuteTool(t *testing.T, tools []tool.BaseTool) tool.BaseTool {
 	return nil
 }
 
-func waitTerminalTask(t *testing.T, manager *backgroundtask.Manager) *backgroundtask.Task {
+func waitTerminalTask(t *testing.T, manager *background.Manager) *background.TaskSnapshot {
 	t.Helper()
 	store, ok := testManagerStores.Load(manager)
 	require.True(t, ok, "test Manager Store is unavailable")
-	outbox := store.(backgroundtask.NotificationOutbox)
-	var terminal *backgroundtask.Task
+	outbox := store.(background.NotificationOutbox)
+	var terminal *background.TaskSnapshot
 	require.Eventually(t, func() bool {
 		deliveries, err := outbox.Receive(
 			context.Background(),
-			&backgroundtask.ReceiveNotificationsRequest{
+			&background.ReceiveNotificationsRequest{
 				Limit: 10, LeaseDuration: time.Millisecond,
 			},
 		)
@@ -164,9 +174,9 @@ func waitTerminalTask(t *testing.T, manager *backgroundtask.Manager) *background
 		for _, delivery := range deliveries.Deliveries {
 			task, getErr := manager.Get(context.Background(), delivery.Record.TaskID)
 			require.NoError(t, getErr)
-			if task.Status == backgroundtask.StatusCompleted ||
-				task.Status == backgroundtask.StatusFailed ||
-				task.Status == backgroundtask.StatusCanceled {
+			if task.Status == background.StatusCompleted ||
+				task.Status == background.StatusFailed ||
+				task.Status == background.StatusCanceled {
 				terminal = task
 				return true
 			}
@@ -280,7 +290,7 @@ func TestManagedExecuteTool_Foreground(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 
-	_, err = mgr.ListPending(context.Background(), &backgroundtask.ListPendingRequest{
+	_, err = mgr.ListPending(context.Background(), &background.ListPendingRequest{
 		ExecutorKeys: []string{"eino.dev/process-local"},
 	})
 	require.NoError(t, err)
@@ -388,7 +398,7 @@ func TestManagedExecuteTool_Background(t *testing.T) {
 
 	close(release)
 	task := waitTerminalTask(t, mgr)
-	assert.Equal(t, backgroundtask.StatusCompleted, task.Status)
+	assert.Equal(t, background.StatusCompleted, task.Status)
 	assert.Equal(t, "test-session", task.Spec.SessionID)
 	assert.True(t, task.Spec.NotifySession)
 
@@ -430,7 +440,7 @@ func TestManagedExecuteTool_TimeoutMovesToBackground(t *testing.T) {
 	assert.Contains(t, result, "Command running in background with ID:")
 
 	task := waitTerminalTask(t, mgr)
-	assert.Equal(t, backgroundtask.StatusCompleted, task.Status)
+	assert.Equal(t, background.StatusCompleted, task.Status)
 	assert.Equal(t, "slow done", string(task.ResultData))
 }
 
@@ -462,7 +472,7 @@ func TestShellPayloadV1AndCommandFromTask(t *testing.T) {
 		executeArgs: executeArgs{Command: "echo hello"},
 	}, &bashOutputWriter{}, "test-session")
 	require.NoError(t, err)
-	task := &backgroundtask.Task{Spec: backgroundtask.Spec{
+	task := &background.TaskSnapshot{Spec: background.Spec{
 		Kind: ExecuteTaskKind, Payload: input.Payload,
 	}}
 	assert.Equal(t, "echo hello", CommandFromTask(task))
@@ -472,7 +482,7 @@ func TestShellPayloadV1AndCommandFromTask(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, CommandFromTask(task))
 	_, err = decodeShellPayload(task.Spec.Payload)
-	assert.ErrorIs(t, err, backgroundtask.ErrUnsupportedExecutorPayloadVersion)
+	assert.ErrorIs(t, err, background.ErrUnsupportedExecutorPayloadVersion)
 }
 
 // With a Manager, the execute tool schema gains run_in_background and timeout fields.
@@ -527,7 +537,7 @@ func TestManagedExecuteTool_StreamingExplicitBackground(t *testing.T) {
 	assert.Contains(t, got, "is running in the background")
 
 	task := waitTerminalTask(t, mgr)
-	assert.Equal(t, backgroundtask.StatusCompleted, task.Status)
+	assert.Equal(t, background.StatusCompleted, task.Status)
 	assert.Contains(t, string(task.ResultData), "chunk3")
 	assert.Contains(t, string(task.ResultData), "chunk1")
 	// The streamed output was teed to the output file as it drained in the background.
@@ -877,7 +887,7 @@ func TestManagedExecuteTool_StreamingSourceError_ClosesStream(t *testing.T) {
 	sr.Close()
 
 	task := waitTerminalTask(t, mgr)
-	assert.Equal(t, backgroundtask.StatusFailed, task.Status)
+	assert.Equal(t, background.StatusFailed, task.Status)
 
 	opens := atomic.LoadInt32(&counter.opens)
 	closes := atomic.LoadInt32(&counter.closes)

@@ -348,9 +348,9 @@ type Backend interface {
 
 // ExecuteRequest contains parameters for executing a command.
 //
-// Foreground/background switching and timeouts are the caller's concern (e.g. the
-// backgroundtask Manager): a backend simply runs the command and must honor ctx
-// cancellation, which is how a timed-out or canceled run is stopped.
+// Foreground/background switching and timeouts are the caller's concern (e.g. a
+// task manager): a backend simply runs the command and must honor ctx cancellation,
+// which is how a timed-out or canceled run is stopped.
 type ExecuteRequest struct {
 	Command string // The command to execute
 }

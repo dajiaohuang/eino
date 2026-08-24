@@ -32,13 +32,13 @@ import (
 	"github.com/slongfield/pyfmt"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/adk/backgroundtask"
-	backgroundlocal "github.com/cloudwego/eino/adk/backgroundtask/local"
-	backgroundshell "github.com/cloudwego/eino/adk/backgroundtask/shell"
-	backgroundtool "github.com/cloudwego/eino/adk/backgroundtask/tool"
 	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/adk/internal"
 	"github.com/cloudwego/eino/adk/internal/foreground"
+	"github.com/cloudwego/eino/adk/task/background"
+	backgroundlocal "github.com/cloudwego/eino/adk/task/local"
+	backgroundshell "github.com/cloudwego/eino/adk/task/shell"
+	backgroundtool "github.com/cloudwego/eino/adk/task/tool"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/compose"
@@ -114,9 +114,8 @@ type LocalBackgroundConfig struct {
 // owns durable command state keyed by task ID.
 type RecoverableBackgroundConfig struct {
 	Shell backgroundshell.RecoverableShell
-	// Manager and Executors must be the same authorities used by the host worker.
-	Manager            *backgroundtask.Manager
-	Executors          *backgroundtask.ExecutorRegistry
+	// Manager owns task lifecycle and executor registration.
+	Manager            *background.Manager
 	ToolRegistry       *backgroundtool.Registry
 	OutputMaterializer backgroundtool.OutputMaterializer
 	// ForegroundTimeoutMs is in milliseconds. ShouldAutoBackground may be called
@@ -419,8 +418,8 @@ func validateBackgroundConfig(
 	if shell != nil || streamingShell != nil {
 		return errors.New("filesystem: foreground and recoverable background shells are mutually exclusive")
 	}
-	if recoverable.Shell == nil || recoverable.Manager == nil || recoverable.Executors == nil {
-		return errors.New("filesystem: recoverable background Shell, Manager, and Executors are required")
+	if recoverable.Shell == nil || recoverable.Manager == nil {
+		return errors.New("filesystem: recoverable background Shell and Manager are required")
 	}
 	return nil
 }
@@ -719,8 +718,7 @@ func newRecoverableExecuteTool(
 		return nil, err
 	}
 	return backgroundtool.NewManagedTool(ctx, &backgroundtool.ManagedToolConfig{
-		Manager: manager, Executors: background.Executors,
-		Registry: registry, ToolName: toolName,
+		Manager: manager, Registry: registry, ToolName: toolName,
 		ForegroundTimeoutMs:  background.ForegroundTimeoutMs,
 		ShouldAutoBackground: background.ShouldAutoBackground,
 		SessionID:            middlewareConfig.notificationSessionID,
