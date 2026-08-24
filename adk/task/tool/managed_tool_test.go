@@ -483,7 +483,7 @@ func (t *interruptingInputTool) Start(
 	t.mu.Unlock()
 	return &StartResult{Run: &fakeRun{
 		wait: func(context.Context) (*Outcome, error) {
-			return &Outcome{Status: background.StatusCompleted}, nil
+			return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 		},
 	}}, nil
 }
@@ -556,7 +556,7 @@ func TestManagedToolFastCompletionReturnsCanonicalTaskID(t *testing.T) {
 			return &fakeRun{
 				wait: func(context.Context) (*Outcome, error) {
 					return &Outcome{
-						Status: background.StatusCompleted,
+						Status: taskcore.OutcomeCompleted,
 						Data:   []byte(`{"answer":42}`),
 					}, nil
 				},
@@ -597,7 +597,7 @@ func TestManagedToolForegroundStartCanSendParentSessionEvent(t *testing.T) {
 			require.NoError(t, err)
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				return &Outcome{
-					Status: background.StatusCompleted,
+					Status: taskcore.OutcomeCompleted,
 					Data:   []byte(`{"ok":true}`),
 				}, nil
 			}}, nil
@@ -675,7 +675,7 @@ func TestManagedToolBackgroundStartCanSendParentSessionEvent(t *testing.T) {
 			})
 			require.NoError(t, err)
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -770,7 +770,7 @@ func TestManagedToolBackgroundWaitCannotSendParentSessionEvent(t *testing.T) {
 						},
 					},
 				})
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -905,7 +905,7 @@ func TestManagedToolBackgroundStartWindowTimeoutReturnsLaunchResult(t *testing.T
 				},
 			})
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -981,7 +981,7 @@ func TestManagedToolBackgroundStartWindowWithoutSenderStillWaits(t *testing.T) {
 			close(startEntered)
 			<-continueStart
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -1015,7 +1015,7 @@ func TestManagedToolBackgroundStreamReturnsLaunchBeforeTaskTerminal(t *testing.T
 		start: func(context.Context, *StartRequest) (Run, error) {
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				<-waitReleased
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -1047,7 +1047,7 @@ func TestAttack_BackgroundStreamParentCancelReturnsLaunchResult(t *testing.T) {
 			close(startEntered)
 			<-continueStart
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -1112,7 +1112,7 @@ func TestManagedToolBackgroundStreamProjectionHandlesUpdatePressure(t *testing.T
 			return &updatingRun{
 				fakeRun: &fakeRun{wait: func(context.Context) (*Outcome, error) {
 					<-waitReleased
-					return &Outcome{Status: background.StatusCompleted}, nil
+					return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 				}},
 				updates: schema.StreamReaderFromArray(updates),
 			}, nil
@@ -1182,7 +1182,7 @@ func TestManagedToolBackgroundStartWindowIgnoresInvocationTimeout(t *testing.T) 
 			})
 			require.NoError(t, err)
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -1255,7 +1255,7 @@ func TestManagedToolForegroundWaitingInputResumesWithoutTask(t *testing.T) {
 				return &fakeRun{
 					wait: func(context.Context) (*Outcome, error) {
 						return &Outcome{
-							Status: background.StatusWaitingInput,
+							Status: taskcore.OutcomeInterrupted,
 							InputRequest: &InputRequest{
 								ID: "approval", Data: []byte(`{"question":"Approve?"}`),
 							},
@@ -1277,7 +1277,7 @@ func TestManagedToolForegroundWaitingInputResumesWithoutTask(t *testing.T) {
 			mu.Unlock()
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				return &Outcome{
-					Status: background.StatusCompleted,
+					Status: taskcore.OutcomeCompleted,
 					Data:   []byte(`{"approved":true}`),
 				}, nil
 			}}, nil
@@ -1353,7 +1353,7 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 				return &fakeRun{
 					wait: func(context.Context) (*Outcome, error) {
 						return &Outcome{
-							Status: background.StatusWaitingInput,
+							Status: taskcore.OutcomeInterrupted,
 							InputRequest: &InputRequest{
 								ID: "approval", Data: []byte(`{"question":"Approve?"}`),
 							},
@@ -1391,7 +1391,7 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				if request.RequestID == "approval" {
 					return &Outcome{
-						Status: background.StatusWaitingInput,
+						Status: taskcore.OutcomeInterrupted,
 						InputRequest: &InputRequest{
 							ID: "region", Data: []byte(`{"question":"Which region?"}`),
 						},
@@ -1401,7 +1401,7 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 					}, nil
 				}
 				return &Outcome{
-					Status: background.StatusCompleted, Data: []byte("done"),
+					Status: taskcore.OutcomeCompleted, Data: []byte("done"),
 				}, nil
 			}}, nil
 		},
@@ -1520,7 +1520,7 @@ func TestManagedToolReplaysResumeAfterWorkerHandoff_BitsUT(t *testing.T) {
 			start: func(context.Context, *StartRequest) (Run, error) {
 				return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 					return &Outcome{
-						Status: background.StatusWaitingInput,
+						Status: taskcore.OutcomeInterrupted,
 						InputRequest: &InputRequest{
 							ID: "approval", Data: []byte(`{"question":"Approve?"}`),
 						},
@@ -1530,7 +1530,7 @@ func TestManagedToolReplaysResumeAfterWorkerHandoff_BitsUT(t *testing.T) {
 			recover: func(context.Context, *RecoverRequest) (Run, error) {
 				return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 					return &Outcome{
-						Status: background.StatusCompleted, Data: []byte("approved"),
+						Status: taskcore.OutcomeCompleted, Data: []byte("approved"),
 					}, nil
 				}}, nil
 			},
@@ -1551,7 +1551,7 @@ func TestManagedToolReplaysResumeAfterWorkerHandoff_BitsUT(t *testing.T) {
 			}
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				return &Outcome{
-					Status: background.StatusCompleted, Data: []byte("approved"),
+					Status: taskcore.OutcomeCompleted, Data: []byte("approved"),
 				}, nil
 			}}, nil
 		},
@@ -1617,7 +1617,7 @@ func TestManagedToolAutoBackgroundAndStop(t *testing.T) {
 				wait: func(ctx context.Context) (*Outcome, error) {
 					select {
 					case <-stopped:
-						return &Outcome{Status: background.StatusCanceled}, nil
+						return &Outcome{Status: taskcore.OutcomeCanceled}, nil
 					case <-ctx.Done():
 						return nil, ctx.Err()
 					}
@@ -1669,7 +1669,7 @@ func TestManagedToolStreamPersistsBeforeNDJSONProjection(t *testing.T) {
 				wait: func(context.Context) (*Outcome, error) {
 					<-updateSent
 					return &Outcome{
-						Status: background.StatusCompleted, Data: []byte("done"),
+						Status: taskcore.OutcomeCompleted, Data: []byte("done"),
 					}, nil
 				},
 			},
@@ -1734,7 +1734,7 @@ func TestManagedToolDrainYieldsAndRecoversWithoutStop(t *testing.T) {
 			recovered <- request
 			return &fakeRun{
 				wait: func(context.Context) (*Outcome, error) {
-					return &Outcome{Status: background.StatusCompleted, Data: []byte("done")}, nil
+					return &Outcome{Status: taskcore.OutcomeCompleted, Data: []byte("done")}, nil
 				},
 			}, nil
 		},
@@ -1798,7 +1798,7 @@ func TestRecoverWithoutCheckpointUsesPersistedStartedGate(t *testing.T) {
 			recovered = true
 			require.Nil(t, request.Checkpoint)
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}}
@@ -1844,7 +1844,7 @@ func TestManagedToolMaterializerIsDerivedAndFailureIsNonTerminal(t *testing.T) {
 				fakeRun: &fakeRun{wait: func(context.Context) (*Outcome, error) {
 					<-sent
 					time.Sleep(time.Millisecond)
-					return &Outcome{Status: background.StatusCompleted}, nil
+					return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 				}},
 				updates: reader,
 			}, nil
@@ -1894,7 +1894,7 @@ func TestManagedToolPlainRegistrationUsesFailExecutor(t *testing.T) {
 	implementation := &plainFakeTool{
 		start: func(context.Context, *StartRequest) (Run, error) {
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -1972,7 +1972,7 @@ func TestManagedToolRejectsNilRichResultWithoutPartialResult(t *testing.T) {
 	implementation := &plainFakeTool{
 		start: func(context.Context, *StartRequest) (Run, error) {
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
-				return &Outcome{Status: background.StatusCompleted}, nil
+				return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 			}}, nil
 		},
 	}
@@ -2006,7 +2006,7 @@ func TestManagedToolReturnsControlEnvelopeAndRichResult_BitsUT(t *testing.T) {
 		start: func(context.Context, *StartRequest) (Run, error) {
 			return &fakeRun{wait: func(context.Context) (*Outcome, error) {
 				return &Outcome{
-					Status: background.StatusCompleted,
+					Status: taskcore.OutcomeCompleted,
 					Data:   []byte(`{"internal":"result"}`),
 				}, nil
 			}}, nil
@@ -2080,7 +2080,7 @@ func TestManagedToolProjectionDetachesWhilePersistenceContinues(t *testing.T) {
 			return &updatingRun{
 				fakeRun: &fakeRun{wait: func(context.Context) (*Outcome, error) {
 					<-finished
-					return &Outcome{Status: background.StatusCompleted}, nil
+					return &Outcome{Status: taskcore.OutcomeCompleted}, nil
 				}},
 				updates: reader,
 			}, nil

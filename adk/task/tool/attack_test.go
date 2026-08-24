@@ -132,7 +132,7 @@ func updatingRunFrom(
 	return &updatingRun{
 		fakeRun: &fakeRun{wait: func(context.Context) (*Outcome, error) {
 			<-sent
-			return &Outcome{Status: background.StatusCompleted}, nil
+			return &Outcome{Status: task.OutcomeCompleted}, nil
 		}},
 		updates: reader,
 	}

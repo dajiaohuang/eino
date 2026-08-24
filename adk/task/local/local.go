@@ -159,12 +159,16 @@ func (r *Runner) Run(ctx context.Context, input *Input, work WorkFunc) (*backgro
 		copy := execution
 		parentExecution = &copy
 	}
-	mailbox, err := r.manager.RegisterMailbox(ctx, &task.RegisterMailboxRequest{
+	registerRequest := &task.RegisterMailboxRequest{
 		CandidateTaskID: spec.ID, InvocationID: "local:" + spec.ID,
-		Identity:     append([]byte(nil), spec.Payload...),
-		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
-		ParentExecution: parentExecution,
-	})
+		Identity: append([]byte(nil), spec.Payload...),
+	}
+	if parentExecution == nil {
+		registerRequest.RootSessionID = spec.RootSessionID
+	} else {
+		registerRequest.ParentExecution = parentExecution
+	}
+	mailbox, err := r.manager.RegisterMailbox(ctx, registerRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -387,14 +391,18 @@ func (r *Runner) RunStream(
 			copy := execution
 			parentExecution = &copy
 		}
+		registerRequest := &task.RegisterMailboxRequest{
+			CandidateTaskID: spec.ID, InvocationID: "local:" + spec.ID,
+			Identity: append([]byte(nil), spec.Payload...),
+		}
+		if parentExecution == nil {
+			registerRequest.RootSessionID = spec.RootSessionID
+		} else {
+			registerRequest.ParentExecution = parentExecution
+		}
 		registered, registerErr := r.manager.RegisterMailbox(
 			ctx,
-			&task.RegisterMailboxRequest{
-				CandidateTaskID: spec.ID, InvocationID: "local:" + spec.ID,
-				Identity:     append([]byte(nil), spec.Payload...),
-				ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
-				ParentExecution: parentExecution,
-			},
+			registerRequest,
 		)
 		if registerErr != nil {
 			return nil, registerErr

@@ -75,12 +75,12 @@ type middlewareRunOptions struct {
 type runtimeBarrierFunc func(
 	context.Context,
 	*durablesubagent.CompletionContext[*schema.Message],
-) (durablesubagent.CompletionDecision, error)
+) (durablesubagent.CompletionAction, error)
 
 func (f runtimeBarrierFunc) Check(
 	ctx context.Context,
 	input *durablesubagent.CompletionContext[*schema.Message],
-) (durablesubagent.CompletionDecision, error) {
+) (durablesubagent.CompletionAction, error) {
 	return f(ctx, input)
 }
 
@@ -124,10 +124,10 @@ func TestControllerAgentToolForeground(t *testing.T) {
 			Barrier: runtimeBarrierFunc(func(
 				context.Context,
 				*durablesubagent.CompletionContext[*schema.Message],
-			) (durablesubagent.CompletionDecision, error) {
-				return durablesubagent.Complete, nil
+			) (durablesubagent.CompletionAction, error) {
+				return durablesubagent.CompletionComplete, nil
 			}),
-			EventToInput: func(
+			InputsToAgentInput: func(
 				context.Context,
 				[]*task.InputRecord,
 			) (*adk.AgentInput, error) {
@@ -184,10 +184,10 @@ func durableBackground(t *testing.T, mgr *background.Manager, agents ...adk.Agen
 			Barrier: runtimeBarrierFunc(func(
 				context.Context,
 				*durablesubagent.CompletionContext[*schema.Message],
-			) (durablesubagent.CompletionDecision, error) {
-				return durablesubagent.Complete, nil
+			) (durablesubagent.CompletionAction, error) {
+				return durablesubagent.CompletionComplete, nil
 			}),
-			EventToInput: func(
+			InputsToAgentInput: func(
 				context.Context,
 				[]*task.InputRecord,
 			) (*adk.AgentInput, error) {

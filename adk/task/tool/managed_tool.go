@@ -525,12 +525,16 @@ func (t *managedTool) startForeground(ctx context.Context, arguments string) (*f
 		copy := execution
 		parentExecution = &copy
 	}
-	registered, err := t.manager.RegisterMailbox(ctx, &task.RegisterMailboxRequest{
+	registerRequest := &task.RegisterMailboxRequest{
 		CandidateTaskID: taskID, InvocationID: invocationID,
-		Identity:     append([]byte(nil), spec.Payload...),
-		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
-		ParentExecution: parentExecution,
-	})
+		Identity: append([]byte(nil), spec.Payload...),
+	}
+	if parentExecution == nil {
+		registerRequest.RootSessionID = spec.RootSessionID
+	} else {
+		registerRequest.ParentExecution = parentExecution
+	}
+	registered, err := t.manager.RegisterMailbox(ctx, registerRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -573,7 +577,7 @@ func (t *managedTool) waitForeground(
 		updates = source.Updates()
 		if updates == nil {
 			return &Outcome{
-				Status: background.StatusFailed,
+				Status: task.OutcomeFailed,
 				Error:  "task/tool: update source returned a nil reader",
 			}, nil, nil
 		}
@@ -608,29 +612,29 @@ func (t *managedTool) waitForeground(
 			}
 			if update.err != nil {
 				_ = start.run.Stop(context.Background())
-				return &Outcome{Status: background.StatusFailed, Error: update.err.Error()}, nil, nil
+				return &Outcome{Status: task.OutcomeFailed, Error: update.err.Error()}, nil, nil
 			}
 			_, err := t.processForegroundUpdate(ctx, start.spec, update.update, seenUpdates)
 			if err != nil {
 				_ = start.run.Stop(context.Background())
-				return &Outcome{Status: background.StatusFailed, Error: err.Error()}, nil, nil
+				return &Outcome{Status: task.OutcomeFailed, Error: err.Error()}, nil, nil
 			}
 		case result := <-waitResult:
 			if err := t.drainForegroundUpdates(ctx, start.spec, updateResults, seenUpdates); err != nil {
-				return &Outcome{Status: background.StatusFailed, Error: err.Error()}, nil, nil
+				return &Outcome{Status: task.OutcomeFailed, Error: err.Error()}, nil, nil
 			}
 			if result.err != nil {
-				return &Outcome{Status: background.StatusFailed, Error: result.err.Error()}, nil, nil
+				return &Outcome{Status: task.OutcomeFailed, Error: result.err.Error()}, nil, nil
 			}
 			return result.outcome, nil, nil
 		case <-timeout:
-			task, err := t.tryHandoff(ctx, start)
-			if err == nil && task != nil {
-				return nil, task, nil
+			backgroundTask, err := t.tryHandoff(ctx, start)
+			if err == nil && backgroundTask != nil {
+				return nil, backgroundTask, nil
 			}
 			_ = start.run.Stop(context.Background())
 			return &Outcome{
-				Status: background.StatusFailed,
+				Status: task.OutcomeFailed,
 				Error:  fmt.Sprintf("timed out after %dms", t.timeoutMs(ctx, arguments)),
 			}, nil, nil
 		case <-ctx.Done():
@@ -647,7 +651,7 @@ func (t *managedTool) finishForeground(
 	toolCheckpoint []byte,
 	outcome *Outcome,
 ) (*schema.ToolResult, error) {
-	if outcome != nil && outcome.Status == background.StatusWaitingInput {
+	if outcome != nil && outcome.Status == task.OutcomeInterrupted {
 		if _, ok := t.registration.Tool.(ResumableTool); !ok {
 			return t.renderForegroundFailure(
 				ctx,
@@ -671,6 +675,21 @@ func (t *managedTool) finishForeground(
 		return nil, err
 	}
 	return result, nil
+}
+
+func lifecycleStatusForOutcome(status task.OutcomeStatus) (background.Status, error) {
+	switch status {
+	case task.OutcomeCompleted:
+		return background.StatusCompleted, nil
+	case task.OutcomeInterrupted:
+		return background.StatusWaitingInput, nil
+	case task.OutcomeFailed:
+		return background.StatusFailed, nil
+	case task.OutcomeCanceled:
+		return background.StatusCanceled, nil
+	default:
+		return "", fmt.Errorf("task/tool: unsupported outcome status %v", status)
+	}
 }
 
 func (t *managedTool) interruptForeground(
@@ -1056,13 +1075,17 @@ func (t *managedTool) renderForegroundOutcome(
 	if err != nil {
 		return nil, err
 	}
+	status, err := lifecycleStatusForOutcome(outcome.Status)
+	if err != nil {
+		return nil, err
+	}
 	event := &ManagedToolResponseEvent{
 		Type:        ManagedToolResponseEventForegroundResult,
-		Status:      outcome.Status,
+		Status:      status,
 		Description: spec.Description,
 	}
 	var rich *schema.ToolResult
-	if outcome.Status == background.StatusCompleted {
+	if outcome.Status == task.OutcomeCompleted {
 		if t.registration.RenderResult != nil {
 			task := &background.TaskSnapshot{
 				Spec: spec, Status: background.StatusCompleted,
@@ -1086,10 +1109,10 @@ func (t *managedTool) renderForegroundOutcome(
 			}
 		}
 	}
-	if outcome.Status == background.StatusFailed || outcome.Status == background.StatusCanceled {
+	if outcome.Status == task.OutcomeFailed || outcome.Status == task.OutcomeCanceled {
 		event.Error = result.Error
 	}
-	if outcome.Status == background.StatusWaitingInput {
+	if outcome.Status == task.OutcomeInterrupted {
 		event.InputRequest = outcome.InputRequest
 	}
 	rendered, err := renderEvent(event)
