@@ -162,7 +162,7 @@ func (r *Runner) Run(ctx context.Context, input *Input, work WorkFunc) (*backgro
 	mailbox, err := r.manager.RegisterMailbox(ctx, &task.RegisterMailboxRequest{
 		CandidateTaskID: spec.ID, InvocationID: "local:" + spec.ID,
 		Identity:     append([]byte(nil), spec.Payload...),
-		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.SessionID,
+		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
 		ParentExecution: parentExecution,
 	})
 	if err != nil {
@@ -181,8 +181,8 @@ func (r *Runner) runForeground(
 	startedAt := time.Now()
 	workCtx, cancel := context.WithCancel(ctx)
 	workCtx = task.WithExecutionContext(workCtx, task.ExecutionContext{
-		TaskID: spec.ID, Mode: task.ModeForeground,
-		OwnerEpoch: mailbox.Generation, RootSessionID: spec.SessionID,
+		TaskID: spec.ID, Owner: task.OwnerParent,
+		Generation: mailbox.Generation, RootSessionID: spec.RootSessionID,
 	})
 	adopted := false
 	defer func() {
@@ -392,7 +392,7 @@ func (r *Runner) RunStream(
 			&task.RegisterMailboxRequest{
 				CandidateTaskID: spec.ID, InvocationID: "local:" + spec.ID,
 				Identity:     append([]byte(nil), spec.Payload...),
-				ParentTaskID: spec.ParentTaskID, RootSessionID: spec.SessionID,
+				ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
 				ParentExecution: parentExecution,
 			},
 		)
@@ -479,8 +479,8 @@ func (r *Runner) runForegroundStream(
 	input, spec, mailbox := run.input, run.spec, run.mailbox
 	workCtx, cancel := context.WithCancel(ctx)
 	workCtx = task.WithExecutionContext(workCtx, task.ExecutionContext{
-		TaskID: spec.ID, Mode: task.ModeForeground,
-		OwnerEpoch: mailbox.Generation, RootSessionID: spec.SessionID,
+		TaskID: spec.ID, Owner: task.OwnerParent,
+		Generation: mailbox.Generation, RootSessionID: spec.RootSessionID,
 	})
 	resultCh := make(chan struct {
 		value string
@@ -534,12 +534,13 @@ func (r *Runner) newSpec(ctx context.Context, input *Input) (background.Spec, er
 	spec := background.Spec{
 		ID: id, ExecutorKey: executorKey, Kind: input.Kind,
 		Payload: append([]byte(nil), input.Payload...), Description: input.Description,
-		OutputFile: input.OutputFile, SessionID: input.SessionID, NotifySession: input.NotifySession,
+		OutputFile: input.OutputFile, RootSessionID: input.SessionID,
+		NotifySession: input.NotifySession,
 	}
 	if execution, ok := task.ExecutionContextFromContext(ctx); ok {
 		spec.ParentTaskID = execution.TaskID
 		if execution.RootSessionID != "" {
-			spec.SessionID = execution.RootSessionID
+			spec.RootSessionID = execution.RootSessionID
 		}
 	}
 	return spec, nil

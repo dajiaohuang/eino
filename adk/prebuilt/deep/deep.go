@@ -48,7 +48,9 @@ func init() {
 // TypedTaskConfig enables selected background-task capabilities for a
 // DeepAgent's top-level agent under one shared task-ID space.
 type TypedTaskConfig[M adk.MessageType] struct {
-	// Manager is the single lifecycle authority shared by every enabled capability.
+	// Manager is the lifecycle authority shared by every enabled capability.
+	// It may be omitted when SubAgents.Runtime is configured, in which case the
+	// runtime's Manager is used.
 	Manager *background.Manager
 	// SubAgents enables reconstructable sub-agent runs.
 	SubAgents *TypedDurableSubAgentConfig[M]
@@ -182,7 +184,8 @@ func validateTypedConfig[M adk.MessageType](cfg *TypedConfig[M]) error {
 	if cfg.Tasks == nil {
 		return nil
 	}
-	if cfg.Tasks.Manager == nil {
+	manager := deepBackgroundManager(cfg.Tasks)
+	if manager == nil {
 		return fmt.Errorf("deep: background Manager is required")
 	}
 	if cfg.Tasks.SubAgents == nil &&
@@ -192,6 +195,13 @@ func validateTypedConfig[M adk.MessageType](cfg *TypedConfig[M]) error {
 	}
 	if cfg.Tasks.SubAgents != nil && cfg.Tasks.SubAgents.Runtime == nil {
 		return fmt.Errorf("deep: background SubAgents Controller is required")
+	}
+	if cfg.Tasks.Manager != nil && cfg.Tasks.SubAgents != nil &&
+		cfg.Tasks.SubAgents.Runtime != nil &&
+		cfg.Tasks.SubAgents.Runtime.Manager() != cfg.Tasks.Manager {
+		return fmt.Errorf(
+			"deep: Tasks.Manager and SubAgents.Runtime must share the same Manager",
+		)
 	}
 	if cfg.Tasks.RecoverableShell != nil &&
 		cfg.Tasks.RecoverableShell.Shell == nil {
@@ -251,7 +261,7 @@ func NewTyped[M adk.MessageType](ctx context.Context, cfg *TypedConfig[M]) (adk.
 	if childTasks != nil {
 		controlMW, controlErr := taskmw.NewTyped(
 			ctx,
-			&taskmw.TypedConfig[M]{Manager: childTasks.Manager},
+			&taskmw.TypedConfig[M]{Manager: deepBackgroundManager(childTasks)},
 		)
 		if controlErr != nil {
 			return nil, fmt.Errorf(
@@ -457,7 +467,8 @@ func buildTypedBuiltinAgentMiddlewares[M adk.MessageType](ctx context.Context, c
 				mwCfg.Background = &filesystem2.BackgroundConfig{
 					NotificationSessionID: deepNotificationSessionID,
 					Recoverable: &filesystem2.RecoverableBackgroundConfig{
-						Shell: recoverableShell, Manager: background.Manager,
+						Shell:                recoverableShell,
+						Manager:              deepBackgroundManager(background),
 						OutputMaterializer:   background.RecoverableShell.OutputMaterializer,
 						ForegroundTimeoutMs:  background.ForegroundTimeoutMs,
 						ShouldAutoBackground: background.ShouldAutoBackground,
@@ -496,6 +507,10 @@ func deepBackgroundManager[M adk.MessageType](background *TypedTaskConfig[M]) *b
 	if background == nil {
 		return nil
 	}
+	if background.Manager == nil && background.SubAgents != nil &&
+		background.SubAgents.Runtime != nil {
+		return background.SubAgents.Runtime.Manager()
+	}
 	return background.Manager
 }
 
@@ -506,7 +521,7 @@ func deepLocalShellRunner[M adk.MessageType](
 		return nil, nil
 	}
 	return backgroundlocal.New(&backgroundlocal.Config{
-		Manager:              background.Manager,
+		Manager:              deepBackgroundManager(background),
 		ForegroundTimeoutMs:  background.ForegroundTimeoutMs,
 		ShouldAutoBackground: background.ShouldAutoBackground,
 	})

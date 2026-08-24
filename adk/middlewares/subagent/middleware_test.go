@@ -129,7 +129,7 @@ func TestControllerAgentToolForeground(t *testing.T) {
 			}),
 			EventToInput: func(
 				context.Context,
-				[]*task.Input,
+				[]*task.InputRecord,
 			) (*adk.AgentInput, error) {
 				return &adk.AgentInput{
 					Messages: []*schema.Message{schema.UserMessage("event")},
@@ -189,7 +189,7 @@ func durableBackground(t *testing.T, mgr *background.Manager, agents ...adk.Agen
 			}),
 			EventToInput: func(
 				context.Context,
-				[]*task.Input,
+				[]*task.InputRecord,
 			) (*adk.AgentInput, error) {
 				return &adk.AgentInput{
 					Messages: []*schema.Message{schema.UserMessage("event")},
@@ -694,7 +694,7 @@ func TestLocalAgentToolWritesEventTranscript(t *testing.T) {
 	assert.Contains(t, result, "running in background")
 	task := terminalTask(t, manager)
 	require.NotNil(t, task)
-	assert.Equal(t, "parent-session", task.Spec.SessionID)
+	assert.Equal(t, "parent-session", task.Spec.RootSessionID)
 	assert.True(t, task.Spec.NotifySession)
 	require.NotEmpty(t, task.Spec.OutputFile)
 	content, err := backend.Read(ctx, &filesystem.ReadRequest{FilePath: task.Spec.OutputFile})

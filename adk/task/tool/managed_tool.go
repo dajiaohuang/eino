@@ -515,7 +515,7 @@ func (t *managedTool) startForeground(ctx context.Context, arguments string) (*f
 	if err != nil {
 		return nil, err
 	}
-	invocationID := spec.SessionID + ":" + compose.GetToolCallID(ctx)
+	invocationID := spec.RootSessionID + ":" + compose.GetToolCallID(ctx)
 	if compose.GetToolCallID(ctx) == "" {
 		invocationID = "tool:" + taskID
 	}
@@ -528,7 +528,7 @@ func (t *managedTool) startForeground(ctx context.Context, arguments string) (*f
 	registered, err := t.manager.RegisterMailbox(ctx, &task.RegisterMailboxRequest{
 		CandidateTaskID: taskID, InvocationID: invocationID,
 		Identity:     append([]byte(nil), spec.Payload...),
-		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.SessionID,
+		ParentTaskID: spec.ParentTaskID, RootSessionID: spec.RootSessionID,
 		ParentExecution: parentExecution,
 	})
 	if err != nil {
@@ -537,8 +537,9 @@ func (t *managedTool) startForeground(ctx context.Context, arguments string) (*f
 	taskID = registered.Mailbox.TaskID
 	spec.ID = taskID
 	runCtx := task.WithExecutionContext(ctx, task.ExecutionContext{
-		TaskID: taskID, Mode: task.ModeForeground,
-		OwnerEpoch: registered.Mailbox.Generation, RootSessionID: spec.SessionID,
+		TaskID: taskID, Owner: task.OwnerParent,
+		Generation:    registered.Mailbox.Generation,
+		RootSessionID: spec.RootSessionID,
 	})
 	startResult, err := t.registration.Tool.Start(runCtx, &StartRequest{
 		TaskID: taskID, Arguments: arguments, Attempt: 0,
@@ -936,7 +937,7 @@ func (t *managedTool) newSpec(ctx context.Context, arguments string) (string, ba
 	if execution, ok := task.ExecutionContextFromContext(ctx); ok {
 		spec.ParentTaskID = execution.TaskID
 		if execution.RootSessionID != "" {
-			spec.SessionID = execution.RootSessionID
+			spec.RootSessionID = execution.RootSessionID
 		}
 	}
 	return taskID, spec, nil
@@ -967,7 +968,7 @@ func (t *managedTool) specForTaskID(
 	if execution, ok := task.ExecutionContextFromContext(ctx); ok {
 		spec.ParentTaskID = execution.TaskID
 		if execution.RootSessionID != "" {
-			spec.SessionID = execution.RootSessionID
+			spec.RootSessionID = execution.RootSessionID
 		}
 	}
 	return taskID, spec, nil

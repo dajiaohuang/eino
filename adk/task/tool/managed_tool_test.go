@@ -1442,7 +1442,8 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 	require.JSONEq(t, `{"question":"Approve?"}`, string(response.InputRequest.Data))
 
 	_, err = manager.SendInput(context.Background(), &taskcore.SendInputRequest{
-		TaskID: task.Spec.ID, EventID: "noise", Kind: "notification",
+		TaskID: task.Spec.ID,
+		Input:  taskcore.Input{EventID: "noise", Kind: "notification"},
 	})
 	require.NoError(t, err)
 	require.NoError(t, manager.Execute(context.Background(), task.Spec.ID))
@@ -1451,8 +1452,10 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 	require.Equal(t, background.StatusWaitingInput, stillWaiting.Status)
 
 	_, err = manager.SendInput(context.Background(), &taskcore.SendInputRequest{
-		TaskID: task.Spec.ID, EventID: "resume-1", Kind: ResumeInputKind,
-		Data: []byte("reject"),
+		TaskID: task.Spec.ID,
+		Input: taskcore.Input{
+			EventID: "resume-1", Kind: ResumeInputKind, Data: []byte("reject"),
+		},
 	})
 	require.NoError(t, err)
 	require.NoError(t, manager.Execute(context.Background(), task.Spec.ID))
@@ -1465,8 +1468,10 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 	require.Equal(t, "approval", input.ID)
 
 	_, err = manager.SendInput(context.Background(), &taskcore.SendInputRequest{
-		TaskID: task.Spec.ID, EventID: "resume-2", Kind: ResumeInputKind,
-		Data: []byte("approve"),
+		TaskID: task.Spec.ID,
+		Input: taskcore.Input{
+			EventID: "resume-2", Kind: ResumeInputKind, Data: []byte("approve"),
+		},
 	})
 	require.NoError(t, err)
 	require.NoError(t, manager.Execute(context.Background(), task.Spec.ID))
@@ -1477,8 +1482,10 @@ func TestManagedToolDurableInputResume_BitsUT(t *testing.T) {
 	require.Equal(t, "region", input.ID)
 
 	_, err = manager.SendInput(context.Background(), &taskcore.SendInputRequest{
-		TaskID: task.Spec.ID, EventID: "resume-3", Kind: ResumeInputKind,
-		Data: []byte("us-east"),
+		TaskID: task.Spec.ID,
+		Input: taskcore.Input{
+			EventID: "resume-3", Kind: ResumeInputKind, Data: []byte("us-east"),
+		},
 	})
 	require.NoError(t, err)
 	require.NoError(t, manager.Execute(context.Background(), task.Spec.ID))
@@ -1569,8 +1576,10 @@ func TestManagedToolReplaysResumeAfterWorkerHandoff_BitsUT(t *testing.T) {
 	_, err = managerOne.Get(context.Background(), task.Spec.ID)
 	require.NoError(t, err)
 	_, err = managerOne.SendInput(context.Background(), &taskcore.SendInputRequest{
-		TaskID: task.Spec.ID, EventID: "resume", Kind: ResumeInputKind,
-		Data: []byte("yes"),
+		TaskID: task.Spec.ID,
+		Input: taskcore.Input{
+			EventID: "resume", Kind: ResumeInputKind, Data: []byte("yes"),
+		},
 	})
 	require.NoError(t, err)
 

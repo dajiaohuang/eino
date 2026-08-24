@@ -117,7 +117,7 @@ func TestSubmitBuildsManagedToolSpecWithoutInputPreparer_BitsUT(t *testing.T) {
 	require.Equal(t, "background_tool", task.Spec.Kind)
 	require.Equal(t, "direct: {\"value\":\"input\"}", task.Spec.Description)
 	require.Equal(t, "/outputs/allocated-task", task.Spec.OutputFile)
-	require.Equal(t, "parent", task.Spec.SessionID)
+	require.Equal(t, "parent", task.Spec.RootSessionID)
 	require.False(t, task.Spec.NotifySession)
 	var payload taskPayload
 	require.NoError(t, json.Unmarshal(task.Spec.Payload, &payload))
