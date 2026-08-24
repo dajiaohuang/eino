@@ -349,19 +349,19 @@ func TestManagedExecuteTool_BackgroundWithoutNotificationSession(t *testing.T) {
 	assert.Contains(t, result, "Use task_output")
 	assert.NotContains(t, result, "You will be notified")
 
-	pending, err := mgr.ListPending(context.Background(), &backgroundtask.ListPendingRequest{
+	pending, err := mgr.ListPending(context.Background(), &background.ListPendingRequest{
 		ExecutorKeys: []string{"eino.dev/process-local"},
 	})
 	require.NoError(t, err)
 	require.Len(t, pending.Tasks, 1)
-	assert.Empty(t, pending.Tasks[0].Spec.SessionID)
+	assert.Empty(t, pending.Tasks[0].Spec.RootSessionID)
 	assert.False(t, pending.Tasks[0].Spec.NotifySession)
 
 	store, ok := testManagerStores.Load(mgr)
 	require.True(t, ok)
-	deliveries, err := store.(backgroundtask.NotificationOutbox).Receive(
+	deliveries, err := store.(background.NotificationOutbox).Receive(
 		context.Background(),
-		&backgroundtask.ReceiveNotificationsRequest{Limit: 10, LeaseDuration: time.Second},
+		&background.ReceiveNotificationsRequest{Limit: 10, LeaseDuration: time.Second},
 	)
 	require.NoError(t, err)
 	assert.Empty(t, deliveries.Deliveries)
@@ -399,7 +399,7 @@ func TestManagedExecuteTool_Background(t *testing.T) {
 	close(release)
 	task := waitTerminalTask(t, mgr)
 	assert.Equal(t, background.StatusCompleted, task.Status)
-	assert.Equal(t, "test-session", task.Spec.SessionID)
+	assert.Equal(t, "test-session", task.Spec.RootSessionID)
 	assert.True(t, task.Spec.NotifySession)
 
 	// The background-launch message reports the (reserved) output-file path so the

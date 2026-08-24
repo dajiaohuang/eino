@@ -132,11 +132,8 @@ func TestSubmitWithoutNotificationSession_BitsUT(t *testing.T) {
 		Info: toolInfo("direct"),
 		Tool: &submitValidationTool{},
 	}))
-	executors := backgroundtask.NewExecutorRegistry()
-	require.NoError(t, RegisterExecutors(executors, registry))
-	manager := mustNewBackgroundManager(t, context.Background(), &backgroundtask.Config{
-		Executors: executors,
-		IDGen: func(context.Context, *backgroundtask.AllocateTaskIDRequest) (string, error) {
+	manager := mustNewBackgroundManager(t, context.Background(), &background.Config{
+		IDGen: func(context.Context, *background.AllocateTaskIDRequest) (string, error) {
 			return "task-without-notification", nil
 		},
 	})
@@ -146,7 +143,7 @@ func TestSubmitWithoutNotificationSession_BitsUT(t *testing.T) {
 		DisableLifecycleNotifications: true,
 	})
 	require.NoError(t, err)
-	require.Empty(t, task.Spec.SessionID)
+	require.Empty(t, task.Spec.RootSessionID)
 	require.False(t, task.Spec.NotifySession)
 }
 
